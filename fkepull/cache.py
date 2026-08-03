@@ -76,6 +76,36 @@ class DetailCache:
         tmp.replace(path)
         self.writes += 1
 
+    # -- remembering what we learned about the portal ----------------------
+
+    @property
+    def _portal_file(self) -> Path:
+        return self.directory / "portal.json"
+
+    def remembered_search_format(self) -> str | None:
+        """The DateRange order that worked last time, if we've proved one."""
+        if not self.enabled or self.refresh:
+            return None
+        try:
+            value = json.loads(self._portal_file.read_text(encoding="utf-8"))["search_date_format"]
+        except (OSError, ValueError, KeyError):
+            return None
+        return value if value in ("MDY", "DMY") else None
+
+    def remember_search_format(self, value: str) -> None:
+        if not self.enabled:
+            return
+        self._portal_file.parent.mkdir(parents=True, exist_ok=True)
+        self._portal_file.write_text(
+            json.dumps(
+                {
+                    "search_date_format": value,
+                    "detected_at": datetime.now().isoformat(timespec="seconds"),
+                }
+            ),
+            encoding="utf-8",
+        )
+
     def summary(self) -> str:
         if not self.enabled:
             return "cache disabled"

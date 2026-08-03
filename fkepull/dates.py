@@ -15,29 +15,36 @@ from .errors import DataError
 # The search field
 # ---------------------------------------------------------------------------
 
-SEARCH_DATE_FORMAT = "%m/%d/%Y"
+SEARCH_FORMATS = {"MDY": "%m/%d/%Y", "DMY": "%d/%m/%Y"}
+DEFAULT_SEARCH_FORMAT = "MDY"
 
 
-def format_search_date(value: date) -> str:
+def format_search_date(value: date, ordering: str = DEFAULT_SEARCH_FORMAT) -> str:
     """Format a date for the portal's DateRange search field.
 
-    !!! US format, MM/DD/YYYY. !!!
+    Which order this field wants is the single most dangerous unknown in the
+    whole tool: sending the wrong one does not error, it silently matches fewer
+    bookings, so the run "succeeds" with rows missing from the invoice.
 
-    The portal is a UK site and shows UK dates everywhere, but the DateRange
-    filter on /Bookings/MyBookingHistory is parsed as US MM/DD/YYYY. Sending
-    UK order does not error — it silently matches fewer bookings, so the run
-    "succeeds" with rows missing from the invoice.
-
-    This is deliberately not configurable.
+    So the tool does not take anybody's word for it — including its own default.
+    On the first run it sends the same search both ways and keeps whichever
+    comes back with more bookings (see cli._fetch_completed), and it re-checks
+    any time a search comes back empty. MDY is only the starting guess.
     """
-    return value.strftime(SEARCH_DATE_FORMAT)
+    try:
+        return value.strftime(SEARCH_FORMATS[ordering])
+    except KeyError:
+        raise DataError(
+            f"unknown search date format {ordering!r} — "
+            f"use one of: {', '.join(SEARCH_FORMATS)}"
+        ) from None
 
 
-def format_search_range(start: date, end: date) -> str:
-    """Build the DateRange value, e.g. "01/01/2025 - 12/31/2026" (US order)."""
+def format_search_range(start: date, end: date, ordering: str = DEFAULT_SEARCH_FORMAT) -> str:
+    """Build the DateRange value, e.g. "01/01/2025 - 12/31/2026" in MDY order."""
     if end < start:
         raise DataError(f"date range end {end} is before start {start}")
-    return f"{format_search_date(start)} - {format_search_date(end)}"
+    return f"{format_search_date(start, ordering)} - {format_search_date(end, ordering)}"
 
 
 # ---------------------------------------------------------------------------

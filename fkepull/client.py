@@ -233,22 +233,25 @@ class FKEClient:
 
     # -- bookings ----------------------------------------------------------
 
-    def fetch_completed_html(self, path: str, start: date, end: date) -> tuple[str, str]:
+    def fetch_completed_html(
+        self, path: str, start: date, end: date, search_format: str = "MDY"
+    ) -> tuple[str, str]:
         """POST the booking history search. Returns (html, url).
 
-        DateRange goes over the wire in US MM/DD/YYYY — see dates.format_search_range.
-        The other three filters are sent empty so they match everything.
+        `search_format` is the order the DateRange field wants — "MDY" or "DMY".
+        The caller works that out by trying both; see cli._fetch_completed. The
+        other three filters are sent empty so they match everything.
         """
         self._require_login()
         payload = {
-            "DateRange": format_search_range(start, end),
+            "DateRange": format_search_range(start, end, search_format),
             "ClientID": "",
             "PackageID": "",
             "BookingRef": "",
         }
         url = self._url(path)
         if self.verbose:
-            self.log(f"  searching {payload['DateRange']} (US format, deliberately)")
+            self.log(f"  searching {payload['DateRange']} ({search_format})")
         response = self._request("POST", url, data=payload, headers={"Referer": url})
         return response.text, response.url
 

@@ -34,9 +34,17 @@ detail_id_offset = 10000
 # guessing, because guessing wrong silently shifts every date on the invoice.
 display_date_format = "auto"
 
-# NOTE: this does NOT apply to the DateRange search field, which is always sent
-# as US MM/DD/YYYY. See fkepull/dates.py — that one is not configurable on
-# purpose, because getting it wrong truncates results without erroring.
+# The order the DateRange search field wants, which is a different question and
+# has bitten before: sending it the wrong way round returns FEWER bookings
+# rather than an error.
+#   "auto" — try it both ways on the first run, keep whichever finds more
+#            bookings, and remember the answer (stored in the cache directory).
+#            Also re-checks automatically any time a search comes back empty.
+#   "MDY"  — always send 06/14/2026
+#   "DMY"  — always send 14/06/2026
+# Leave this on "auto" unless you have a reason not to; it is the setting that
+# stops bookings quietly going missing from an invoice.
+search_date_format = "auto"
 
 [fetch]
 max_concurrency = 5      # hard cap, never exceeded
@@ -55,12 +63,14 @@ future_ttl_hours = 6
 
 [invoice]
 percent = 20             # the cut you invoice FKE for
-# Rounding of the percentage to whole pounds. "half_up" is how you round by
-# hand (49.50 -> 50). "half_even" is Python's default and rounds .5 to the
-# nearest even number — almost certainly not what you want.
+# The percentage is worked out to the penny. This only decides what happens
+# when it lands on a fraction of a penny (20% of £99.99 is £19.998): "half_up"
+# gives £20.00. "half_even" is Python's default and rounds .5 to the nearest
+# even number — almost certainly not what you want.
 rounding = "half_up"
-# Sum the already-rounded per-line amounts (true, matches what you bill) rather
-# than rounding the sum at the end (false).
+# Sum the per-line amounts (true, matches what you bill line by line) rather
+# than taking the percentage of the total at the end (false). With penny
+# accuracy the two only differ by fractions of a penny.
 total_from_rounded_lines = true
 
 [themes]

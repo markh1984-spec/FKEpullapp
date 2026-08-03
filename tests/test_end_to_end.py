@@ -1,6 +1,7 @@
 """Run the whole tool against the fake portal."""
 
 import csv
+import json
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
@@ -78,16 +79,16 @@ def test_full_run(tmp_path):
     # --- the money --------------------------------------------------------
     fees_and_cuts = [(line[4], line[5]) for line in lines]
     assert fees_and_cuts == [
-        ("150.00", "30"),
-        ("120.50", "24"),
-        ("240.00", "48"),
-        ("197.50", "40"),   # 39.50 rounds up
-        ("175.00", "35"),
-        ("175.00", "35"),
-        ("99.99", "20"),
-        ("162.50", "33"),   # 32.50 rounds up, not to even
+        ("150.00", "30.00"),
+        ("120.50", "24.10"),
+        ("240.00", "48.00"),
+        ("197.50", "39.50"),   # to the penny, not rounded to 40
+        ("175.00", "35.00"),
+        ("175.00", "35.00"),
+        ("99.99", "20.00"),    # 19.998, the only rounding that happens
+        ("162.50", "32.50"),
     ]
-    assert total == ["TOTAL", "", "", "", "1320.49", "265"]
+    assert total == ["TOTAL", "", "", "", "1320.49", "264.10"]
 
     # --- details.csv ------------------------------------------------------
     dheader, *drows = details
@@ -144,7 +145,7 @@ def test_already_invoiced_refs_are_excluded(tmp_path):
     listed = [row[1] for row in rows[:-1]]
     assert "100-26501" not in listed and "100-26502" not in listed
     assert len(listed) == 6
-    assert rows[-1] == ["TOTAL", "", "", "", "1049.99", "211"]
+    assert rows[-1] == ["TOTAL", "", "", "", "1049.99", "210.00"]
 
 
 def test_already_invoiced_refs_can_be_marked_instead(tmp_path):
@@ -159,6 +160,7 @@ def test_already_invoiced_refs_can_be_marked_instead(tmp_path):
     assert rows[1][-1] == ""
     assert rows[-2][0] == "TOTAL (not yet invoiced)"
     assert rows[-2][4] == "1170.49"    # 1320.49 less the 150.00 already billed
+    assert rows[-2][5] == "234.10"     # 264.10 less that booking's 30.00
     assert rows[-1][0] == "TOTAL (all rows)"
     assert rows[-1][4] == "1320.49"
 
@@ -313,3 +315,60 @@ def test_concurrency_is_capped_at_five(tmp_path):
     with FakePortal(state) as portal:
         assert invoke(portal, tmp_path, "--max-concurrency", "50") == 0
     assert state.max_concurrent <= 5
+
+
+# --- which order the DateRange field wants ----------------------------------
+
+def _history_posts(state: PortalState) -> int:
+    return sum(1 for line in state.requests if line == "POST /Bookings/MyBookingHistory")
+
+
+def test_search_format_is_worked_out_and_remembered(tmp_path):
+    """The US/UK question is settled empirically, not by assumption."""
+    state = PortalState()
+    with FakePortal(state) as portal:
+        assert invoke(portal, tmp_path) == 0
+        assert _history_posts(state) == 2, "first run should try it both ways"
+        assert set(state.date_ranges) == {
+            f"01/01/2000 - 12/31/{date.today().year + 2}",
+            f"01/01/2000 - 31/12/{date.today().year + 2}",
+        }
+        assert len(read_csv(tmp_path / "invoice.csv")) == 10  # header + 8 + total
+
+        state.date_ranges.clear()
+        assert invoke(portal, tmp_path) == 0
+        assert _history_posts(state) == 3, "second run should use what it learned"
+        assert state.date_ranges == [f"01/01/2000 - 12/31/{date.today().year + 2}"]
+
+    remembered = json.loads((tmp_path / "cache" / "portal.json").read_text())
+    assert remembered["search_date_format"] == "MDY"
+
+
+def test_it_adapts_if_the_portal_wants_uk_dates(tmp_path):
+    """If FKE ever switch the field to UK order, nothing goes missing."""
+    state = PortalState(search_format="%d/%m/%Y")
+    with FakePortal(state) as portal:
+        assert invoke(portal, tmp_path) == 0
+    rows = read_csv(tmp_path / "invoice.csv")[1:-1]
+    assert len(rows) == 8, "all bookings found despite the other date order"
+    assert json.loads((tmp_path / "cache" / "portal.json").read_text())["search_date_format"] == "DMY"
+
+
+def test_a_pinned_format_that_finds_nothing_is_corrected(tmp_path, capsys):
+    config = tmp_path / "pinned.toml"
+    config.write_text(
+        (ROOT / "config.toml").read_text().replace(
+            'search_date_format = "auto"', 'search_date_format = "MDY"'
+        )
+    )
+    state = PortalState(search_format="%d/%m/%Y")   # portal disagrees with the pin
+    with FakePortal(state) as portal:
+        assert run([
+            "--base-url", portal.base_url,
+            "--config", str(config),
+            "--env-file", str(tmp_path / "none.env"),
+            "--out-dir", str(tmp_path),
+            "--cache-dir", str(tmp_path / "cache"),
+        ]) == 0
+    assert "found nothing sent as MDY" in capsys.readouterr().err
+    assert len(read_csv(tmp_path / "invoice.csv")[1:-1]) == 8

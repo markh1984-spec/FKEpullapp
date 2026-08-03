@@ -18,6 +18,7 @@ DEFAULTS: dict[str, Any] = {
         "login_path": "auto",
         "detail_id_offset": 10000,
         "display_date_format": "auto",
+        "search_date_format": "auto",
     },
     "fetch": {
         "max_concurrency": 5,
@@ -89,6 +90,8 @@ def validate_config(cfg: dict[str, Any]) -> None:
         raise ConfigError("site.detail_id_offset must be a whole number") from None
     if str(site.get("display_date_format", "auto")).upper() not in ("AUTO", "DMY", "MDY"):
         raise ConfigError('site.display_date_format must be "auto", "DMY" or "MDY"')
+    if str(site.get("search_date_format", "auto")).upper() not in ("AUTO", "DMY", "MDY"):
+        raise ConfigError('site.search_date_format must be "auto", "DMY" or "MDY"')
 
     fetch = cfg["fetch"]
     try:

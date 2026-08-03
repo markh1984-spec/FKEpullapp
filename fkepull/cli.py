@@ -17,7 +17,15 @@ from .config import (
     load_credentials,
     HARD_CONCURRENCY_CAP,
 )
-from .dates import detect_ordering, format_uk, has_numeric_dates, parse_display_date, parse_user_date
+from .dates import (
+    DEFAULT_SEARCH_FORMAT,
+    SEARCH_FORMATS,
+    detect_ordering,
+    format_uk,
+    has_numeric_dates,
+    parse_display_date,
+    parse_user_date,
+)
 from .errors import DataError, FKEError
 from .parse import ListingRow, parse_detail, parse_listing
 from .report import build_bookings, load_invoiced_refs, write_details, write_invoice
@@ -99,12 +107,86 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _collect_listings(client: FKEClient, cfg: dict, args, start: date, end: date) -> list[ListingRow]:
+def _search_completed(
+    client: FKEClient, cfg: dict, start: date, end: date, search_format: str
+) -> list[ListingRow]:
+    html, url = client.fetch_completed_html(
+        cfg["site"]["completed_path"], start, end, search_format
+    )
+    return parse_listing(html, url=url, source="completed")
+
+
+def _try_search(client: FKEClient, cfg: dict, start: date, end: date, fmt: str) -> list[ListingRow]:
+    """A search that treats any failure as "this format found nothing"."""
+    try:
+        return _search_completed(client, cfg, start, end, fmt)
+    except FKEError:
+        return []
+
+
+def _fetch_completed(
+    client: FKEClient, cfg: dict, cache: DetailCache, start: date, end: date
+) -> tuple[list[ListingRow], str]:
+    """Run the booking history search, working out which date order it wants.
+
+    Sending DateRange in the wrong order doesn't error — it just returns fewer
+    bookings, which would quietly drop lines off an invoice. So on the first run
+    we send the same search both ways and keep whichever finds more, remember
+    the answer, and re-check any time a search comes back empty.
+    """
+    configured = str(cfg["site"].get("search_date_format", "auto")).upper()
+    if configured in SEARCH_FORMATS:
+        rows = _search_completed(client, cfg, start, end, configured)
+        if rows:
+            return rows, configured
+        other = _other_format(configured)
+        alt = _try_search(client, cfg, start, end, other)
+        if alt:
+            log(
+                f"WARNING: the search found nothing sent as {configured}, but "
+                f"{len(alt)} booking(s) when sent as {other}. Using {other} — "
+                f"change search_date_format in config.toml to match."
+            )
+            return alt, other
+        return rows, configured
+
+    remembered = cache.remembered_search_format()
+    if remembered:
+        rows = _search_completed(client, cfg, start, end, remembered)
+        if rows:
+            return rows, remembered
+        other = _other_format(remembered)
+        alt = _try_search(client, cfg, start, end, other)
+        if alt:
+            log(f"  the DateRange field now wants {other}, not {remembered} — relearning")
+            cache.remember_search_format(other)
+            return alt, other
+        return rows, remembered
+
+    log("  checking which date order the search field wants…")
+    results = {fmt: _try_search(client, cfg, start, end, fmt) for fmt in SEARCH_FORMATS}
+    best = max(SEARCH_FORMATS, key=lambda fmt: len(results[fmt]))
+    counts = ", ".join(f"{fmt}: {len(results[fmt])}" for fmt in SEARCH_FORMATS)
+    if all(not rows for rows in results.values()):
+        log(f"  no bookings either way ({counts}); assuming {DEFAULT_SEARCH_FORMAT}")
+        return [], DEFAULT_SEARCH_FORMAT
+    log(f"  DateRange wants {best} ({counts})")
+    cache.remember_search_format(best)
+    return results[best], best
+
+
+def _other_format(fmt: str) -> str:
+    return "DMY" if fmt == "MDY" else "MDY"
+
+
+def _collect_listings(
+    client: FKEClient, cfg: dict, args, cache: DetailCache, start: date, end: date
+) -> tuple[list[ListingRow], str]:
     rows: list[ListingRow] = []
+    search_format = DEFAULT_SEARCH_FORMAT
     if args.source in ("completed", "both"):
         log("Fetching completed bookings…")
-        html, url = client.fetch_completed_html(cfg["site"]["completed_path"], start, end)
-        completed = parse_listing(html, url=url, source="completed")
+        completed, search_format = _fetch_completed(client, cfg, cache, start, end)
         log(f"  {len(completed)} row(s)")
         rows.extend(completed)
     if args.source in ("upcoming", "both"):
@@ -113,7 +195,7 @@ def _collect_listings(client: FKEClient, cfg: dict, args, start: date, end: date
         upcoming = parse_listing(html, url=url, source="upcoming")
         log(f"  {len(upcoming)} row(s)")
         rows.extend(upcoming)
-    return rows
+    return rows, search_format
 
 
 def _dedupe(rows: list[ListingRow]) -> tuple[list[ListingRow], int]:
@@ -207,7 +289,9 @@ def run(argv: list[str] | None = None) -> int:
 
     search_start = since or DEFAULT_SEARCH_START
     search_end = until or date(date.today().year + 2, 12, 31)
-    rows = _collect_listings(client, cfg, args, search_start, search_end)
+    rows, search_format = _collect_listings(
+        client, cfg, args, cache, search_start, search_end
+    )
     if not rows:
         log("No bookings returned. Nothing to write.")
         return 0
@@ -218,10 +302,10 @@ def run(argv: list[str] | None = None) -> int:
 
     def wider_date_samples() -> list[str]:
         log("  dates in this batch are ambiguous; fetching a wider range to check…")
-        html, url = client.fetch_completed_html(
-            cfg["site"]["completed_path"], DEFAULT_SEARCH_START, date(date.today().year + 2, 12, 31)
+        wide = _try_search(
+            client, cfg, DEFAULT_SEARCH_START, date(date.today().year + 2, 12, 31), search_format
         )
-        return [row.event_date_raw for row in parse_listing(html, url=url, source="completed")]
+        return [row.event_date_raw for row in wide]
 
     ordering = _resolve_ordering(cfg, rows, wider_date_samples)
     if args.verbose:

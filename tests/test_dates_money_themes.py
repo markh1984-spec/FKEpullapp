@@ -123,13 +123,18 @@ def test_parse_money_rejects_nonsense():
         parse_money("see notes")
 
 
-def test_commission_rounds_half_up_not_bankers():
-    # 162.50 -> 32.50. Rounded by hand that's 33; Python's round() says 32.
-    assert commission(Decimal("162.50")) == Decimal("33")
-    assert commission(Decimal("197.50")) == Decimal("40")
-    assert commission(Decimal("150.00")) == Decimal("30")
-    assert commission(Decimal("120.50")) == Decimal("24")
-    assert commission(Decimal("99.99")) == Decimal("20")
+def test_commission_is_exact_to_the_penny():
+    assert commission(Decimal("162.50")) == Decimal("32.50")
+    assert commission(Decimal("197.50")) == Decimal("39.50")
+    assert commission(Decimal("150.00")) == Decimal("30.00")
+    assert commission(Decimal("120.50")) == Decimal("24.10")
+
+
+def test_commission_rounds_sub_penny_amounts_half_up():
+    # 20% of 99.99 is 19.998, which is invoiced as 20.00.
+    assert commission(Decimal("99.99")) == Decimal("20.00")
+    assert commission(Decimal("0.25")) == Decimal("0.05")   # 0.050 -> 0.05
+    assert commission(Decimal("0.75")) == Decimal("0.15")   # 0.150 -> 0.15
 
 
 def test_commission_percent_is_configurable():

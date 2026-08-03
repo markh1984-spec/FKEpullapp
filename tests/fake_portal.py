@@ -162,6 +162,10 @@ class PortalState:
     _in_flight: int = 0
     _lock: threading.Lock = field(default_factory=threading.Lock)
     detail_delay: float = 0.05
+    # Which order this portal parses the DateRange field in. The real one is
+    # believed to be US ("%m/%d/%Y"), but that is exactly what the tool checks
+    # for itself, so the tests run it both ways.
+    search_format: str = "%m/%d/%Y"
     break_detail_layout: bool = False
     # Serve each detail page under someone else's booking ref, i.e. pretend the
     # "detail id = ref number minus 10000" rule has stopped holding.
@@ -304,11 +308,11 @@ def _handler_class(state: PortalState):
             start, end = None, None
             parts = [part.strip() for part in raw_range.split("-")]
             if len(parts) == 2:
-                # The real site reads this as US MM/DD/YYYY. Anything it can't
-                # read that way matches nothing — it does not complain.
+                # Anything the portal can't read in its own format matches
+                # nothing at all — it does not complain.
                 try:
-                    start = datetime.strptime(parts[0], "%m/%d/%Y")
-                    end = datetime.strptime(parts[1], "%m/%d/%Y")
+                    start = datetime.strptime(parts[0], state.search_format)
+                    end = datetime.strptime(parts[1], state.search_format)
                 except ValueError:
                     start = end = None
 

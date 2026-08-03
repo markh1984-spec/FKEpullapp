@@ -190,7 +190,7 @@ def write_invoice(
             format_uk(booking.event_date),
             booking.theme,
             format_money(fee) if booking.fee is not None else "",
-            str(cut) if booking.fee is not None else "",
+            format_money(cut) if booking.fee is not None else "",
         ]
         if mark_invoiced:
             row.append("YES" if booking.invoiced else "")
@@ -206,7 +206,7 @@ def write_invoice(
         total_cut = cuts if total_from_rounded_lines else commission(
             fees, percent=percent, rounding=rounding
         )
-        row = [label, "", "", "", format_money(fees), str(total_cut)]
+        row = [label, "", "", "", format_money(fees), format_money(total_cut)]
         if mark_invoiced:
             row.append("")
         return row

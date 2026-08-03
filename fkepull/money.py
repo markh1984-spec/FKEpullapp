@@ -45,11 +45,14 @@ def format_money(value: Decimal) -> str:
 
 
 def commission(fee: Decimal, *, percent: int = 20, rounding: str = "half_up") -> Decimal:
-    """Your cut of a fee, rounded to whole pounds.
+    """Your cut of a fee, to the penny.
 
-    Default rounding is half-up (49.50 -> 50), which is how you round by hand.
-    Python's built-in round() would give 50 for 49.5 but 48 for 48.5, which is
-    not what anyone expects on an invoice.
+    20% of £162.50 is £32.50 and that is what goes on the invoice — no rounding
+    to pounds in either direction. The only rounding here is to two decimal
+    places, for fees whose percentage lands on a fraction of a penny (20% of
+    £99.99 is £19.998, invoiced as £20.00). Default is half-up, because Python's
+    built-in round() rounds .5 to the nearest even number, which nobody expects
+    on an invoice.
     """
     try:
         mode = ROUNDING_MODES[rounding]
@@ -58,4 +61,4 @@ def commission(fee: Decimal, *, percent: int = 20, rounding: str = "half_up") ->
             f"unknown rounding mode {rounding!r} in config — "
             f"use one of: {', '.join(sorted(ROUNDING_MODES))}"
         ) from None
-    return (fee * Decimal(percent) / Decimal(100)).quantize(Decimal("1"), rounding=mode)
+    return (fee * Decimal(percent) / Decimal(100)).quantize(Decimal("0.01"), rounding=mode)

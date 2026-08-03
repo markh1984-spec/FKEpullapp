@@ -59,10 +59,14 @@ and a total row.
 
 ```csv
 #,Booking Ref,Date,Theme,Fee,20%
-1,100-26502,03/07/2025,party,120.50,24
-2,100-26503,21/11/2025,school disco,240.00,48
-TOTAL,,,,360.50,72
+1,100-26502,03/07/2025,party,120.50,24.10
+2,100-26503,21/11/2025,school disco,240.00,48.00
+TOTAL,,,,360.50,72.10
 ```
+
+The 20% is exact to the penny. The only rounding that ever happens is to two
+decimal places, when the percentage lands on a fraction of a penny (20% of
+£99.99 is £19.998, invoiced as £20.00).
 
 `details.csv` — booking ref, booking confirmed date, customer name, phone,
 package, venue (address line 1), party occasion, duration.
@@ -88,15 +92,19 @@ file. A package that matches nothing at all is listed in a warning at the end
 of the run and gets its full name as the theme, so it's obvious and easy to
 fix. Set `on_unknown = "fail"` if you'd rather it stopped instead.
 
-Also in there: the percentage and how it's rounded (`half_up` — 32.50 becomes
-33, the way you'd do it by hand), the cache settings, and the portal paths.
+Also in there: the percentage, the cache settings, and the portal paths.
 
 ## Things this tool is deliberately careful about
 
-**The date range is US format.** `DateRange` on `/Bookings/MyBookingHistory` is
-`MM/DD/YYYY` even though everything the portal displays is UK. Sending UK order
-doesn't error, it just quietly returns fewer bookings. It's built in one place
-(`fkepull/dates.py`, `format_search_date`) and isn't configurable.
+**The date range format is proved, not assumed.** `DateRange` on
+`/Bookings/MyBookingHistory` is the one field where a wrong guess doesn't error
+— it just quietly returns fewer bookings, so the run "succeeds" with lines
+missing off the invoice. Rather than trust anyone's memory of which way round it
+goes, the first run sends the same search both ways and keeps whichever finds
+more bookings, then remembers the answer in the cache directory. It re-checks
+automatically whenever a search comes back empty, so if FKE ever change it, the
+tool notices instead of silently under-billing. Pin it with
+`search_date_format = "MDY"` (or `"DMY"`) under `[site]` if you'd rather.
 
 **Dates the portal shows are checked, not assumed.** `14/06/2026` proves the
 display format is day-first; if a batch has no date past the 12th of a month,
