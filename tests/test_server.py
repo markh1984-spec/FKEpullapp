@@ -184,3 +184,54 @@ def test_it_listens_on_loopback_only(tmp_path):
             assert app.server.server_address[0] == "127.0.0.1"
         finally:
             app.server.server_close()
+
+
+# --- a URL you can bookmark --------------------------------------------------
+
+def test_the_link_stays_the_same_between_runs(tmp_path):
+    """The whole point of a bookmark: the same URL works tomorrow."""
+    with FakePortal() as portal:
+        first = RunningApp(portal, tmp_path)
+        first.server.server_close()
+        second = RunningApp(portal, tmp_path)
+        second.server.server_close()
+
+    assert first.token == second.token
+    assert first.url.split("?")[1] == second.url.split("?")[1]
+    saved = tmp_path / "cache" / "app-token.txt"
+    assert saved.read_text().strip() == first.token
+    assert oct(saved.stat().st_mode)[-3:] == "600", "the token file shouldn't be world-readable"
+
+
+def test_you_can_pin_your_own_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("FKE_APP_TOKEN", "my-own-secret-token")
+    with FakePortal() as portal:
+        app = RunningApp(portal, tmp_path)
+        app.server.server_close()
+    assert app.token == "my-own-secret-token"
+    assert app.url.endswith("?t=my-own-secret-token")
+
+
+def test_the_bare_url_explains_itself(tmp_path):
+    with FakePortal() as portal, RunningApp(portal, tmp_path) as app:
+        response = requests.get(app.base + "/", timeout=10)
+    assert response.status_code == 403
+    assert "?t=" in response.text
+    assert "text/html" in response.headers["Content-Type"]
+
+
+def test_a_name_of_your_own_can_be_allowed(tmp_path):
+    """e.g. add "127.0.0.1 fke" to /etc/hosts and browse to http://fke:8765/"""
+    with FakePortal() as portal, RunningApp(portal, tmp_path) as app:
+        app.state.allowed_hosts = app.state.allowed_hosts + ("fke",)
+        allowed = requests.get(
+            app.base + "/api/data",
+            headers={"X-FKE-Token": app.token, "Host": "fke:1234"}, timeout=10,
+        )
+        refused = requests.get(
+            app.base + "/api/data",
+            headers={"X-FKE-Token": app.token, "Host": "bookings.example.com"}, timeout=10,
+        )
+    assert allowed.status_code == 200
+    assert refused.status_code == 403
+    assert "allowed_hosts" in refused.text

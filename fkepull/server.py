@@ -1,13 +1,15 @@
 """The local web app: past and upcoming bookings in a browser.
 
 Serves on 127.0.0.1 only, so nothing outside this machine can reach it. Every
-request also has to carry the one-time token printed in the launch URL, because
-any web page you happen to have open can otherwise make requests to localhost.
+request also has to carry the token in the launch URL, because any web page you
+happen to have open can otherwise make requests to localhost. That token is kept
+between runs so the link can be bookmarked.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import threading
 import webbrowser
@@ -25,6 +27,38 @@ from .pipeline import PullOptions, PullResult, pull
 from .report import Booking, csv_text, details_table, invoice_table
 
 PAGE = Path(__file__).resolve().parent / "webapp.html"
+TOKEN_FILE = "app-token.txt"
+
+
+def resolve_token(cache_dir: Path) -> str:
+    """The app's access token, kept the same between runs so you can bookmark it.
+
+    Deliberately not a cookie: cookies aren't isolated by port, so any other
+    local web app you visit would be handed this one's credentials by the
+    browser. Keeping it in the URL means only whoever has the link can get in.
+
+    Delete the file to rotate it, or set FKE_APP_TOKEN to pin your own.
+    """
+    from_env = os.environ.get("FKE_APP_TOKEN")
+    if from_env:
+        return from_env
+
+    path = Path(cache_dir) / TOKEN_FILE
+    try:
+        existing = path.read_text(encoding="utf-8").strip()
+        if existing:
+            return existing
+    except OSError:
+        pass
+
+    token = secrets.token_urlsafe(24)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(token, encoding="utf-8")
+        path.chmod(0o600)
+    except OSError:
+        pass  # can't remember it; a fresh token each run still works
+    return token
 
 
 def _row(booking: Booking, *, percent: int, rounding: str) -> dict:
@@ -70,6 +104,7 @@ class AppState:
     options: PullOptions
     cfg: dict
     token: str = field(default_factory=lambda: secrets.token_urlsafe(24))
+    allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "::1", "[::1]")
 
     result: PullResult | None = None
     error: str | None = None
@@ -140,6 +175,20 @@ class AppState:
         return None
 
 
+NO_TOKEN_PAGE = """<!DOCTYPE html><html lang="en-GB"><head><meta charset="utf-8">
+<title>FKE bookings</title><style>
+body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+max-width:34rem;margin:16vh auto;padding:0 1.5rem;color:#1c1e21}
+code{background:#f0f2f5;padding:2px 6px;border-radius:4px}
+@media(prefers-color-scheme:dark){body{background:#14161a;color:#e7e9ec}
+code{background:#242830}}</style></head><body>
+<h1>Not this link</h1>
+<p>This app needs the full link, the one with <code>?t=…</code> on the end.</p>
+<p>It is printed in the Terminal window when the app starts. Bookmark that one
+and it will keep working — the link stays the same between runs.</p>
+</body></html>"""
+
+
 def _handler_class(state: AppState):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -151,8 +200,9 @@ def _handler_class(state: AppState):
         # -- guards --------------------------------------------------------
 
         def _local_host(self) -> bool:
-            host = (self.headers.get("Host") or "").split(":")[0]
-            return host in ("127.0.0.1", "localhost", "[::1]", "::1")
+            raw = self.headers.get("Host") or ""
+            host = raw.rsplit(":", 1)[0] if raw.count(":") == 1 else raw
+            return host.lower() in state.allowed_hosts
 
         def _token_ok(self, query: dict) -> bool:
             supplied = self.headers.get("X-FKE-Token") or (query.get("t") or [""])[0]
@@ -183,13 +233,17 @@ def _handler_class(state: AppState):
             query = parse_qs(parsed.query)
 
             if not self._local_host():
-                self._text("This app only serves the machine it runs on.", 403)
+                self._text(
+                    "This app only answers to "
+                    f"{', '.join(state.allowed_hosts)}. If you want to reach it "
+                    "by another name, add that name to app.allowed_hosts in "
+                    "config.toml.",
+                    403,
+                )
                 return
             if not self._token_ok(query):
-                self._text(
-                    "Wrong or missing token. Open the exact link printed in the "
-                    "terminal when the app started.",
-                    403,
+                self._send(
+                    NO_TOKEN_PAGE.encode("utf-8"), "text/html; charset=utf-8", 403
                 )
                 return
 
@@ -255,7 +309,14 @@ def create_server(args, cfg: dict, options: PullOptions, *, port: int, log=print
             context.cache.refresh = True
         return context
 
-    state = AppState(make_context=make_context, options=options, cfg=cfg)
+    cache_dir = args.cache_dir or cfg["cache"]["dir"]
+    state = AppState(
+        make_context=make_context,
+        options=options,
+        cfg=cfg,
+        token=resolve_token(Path(cache_dir)),
+        allowed_hosts=tuple(str(h).lower() for h in cfg["app"]["allowed_hosts"]),
+    )
     server = ThreadingHTTPServer(("127.0.0.1", port), _handler_class(state))
     host, actual_port = server.server_address[:2]
     url = f"http://{host}:{actual_port}/?t={state.token}"
@@ -276,6 +337,7 @@ def serve(args, cfg: dict, options: PullOptions, *, port: int, open_browser: boo
 
     log("")
     log(f"fke-pull is running at {url}")
+    log("Bookmark that link — it stays the same next time.")
     log("Only this machine can reach it. Press Ctrl-C to stop.")
 
     if open_browser:

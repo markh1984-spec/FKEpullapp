@@ -47,8 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
              "in a browser, served on this machine only",
     )
     parser.add_argument(
-        "--port", type=int, default=DEFAULT_PORT, metavar="N",
-        help=f"port for --serve (default: {DEFAULT_PORT})",
+        "--port", type=int, default=None, metavar="N",
+        help=f"port for --serve (default: app.port in config.toml, or {DEFAULT_PORT})",
     )
     parser.add_argument(
         "--no-open", action="store_true",
@@ -147,7 +147,8 @@ def run(argv: list[str] | None = None) -> int:
     if args.serve:
         from .server import serve  # only imported when it's actually wanted
 
-        return serve(args, cfg, options, port=args.port, open_browser=not args.no_open, log=log)
+        port = args.port if args.port is not None else int(cfg["app"]["port"])
+        return serve(args, cfg, options, port=port, open_browser=not args.no_open, log=log)
 
     result = pull(context_from(args, cfg), options, log)
 

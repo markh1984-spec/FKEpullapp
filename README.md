@@ -34,9 +34,33 @@ From a terminal it's `./fke-pull --serve`.
   detail page from the portal.
 - Click any column heading to sort. Already-invoiced bookings are tagged.
 
-It listens on `127.0.0.1` only, so nothing outside your Mac can reach it, and
-every request has to carry the one-time token in the URL it opens — otherwise
-any website you happen to have open could quietly talk to it.
+### The URL
+
+It runs at **`http://127.0.0.1:8765/?t=…`** and prints the exact link when it
+starts. That link stays the same every run, so bookmark it once and it keeps
+working. (The token lives in `.fke-cache/app-token.txt`; delete that file to
+issue a new one, or set `FKE_APP_TOKEN` in `.env` to choose your own.)
+
+If you'd rather type a name than an address, add a line to `/etc/hosts`:
+
+```text
+127.0.0.1   fke
+```
+
+then add `"fke"` to `allowed_hosts` under `[app]` in config.toml, and it's at
+`http://fke:8765/?t=…`. Change the port there too if 8765 clashes with
+something.
+
+**It is deliberately only reachable from your own Mac.** It listens on
+`127.0.0.1`, it refuses requests whose `Host` header is a name you haven't
+allowed, and every request needs the token — otherwise any website you had open
+in another tab could quietly read your bookings. The token is in the URL rather
+than a cookie on purpose: browsers don't separate cookies by port, so a cookie
+would be handed to any other local app you happened to visit.
+
+Putting it on a public web address is a different proposition — it holds your
+portal login and your customers' names, phone numbers and home addresses — so
+it isn't something this does out of the box.
 
 ## The command line
 

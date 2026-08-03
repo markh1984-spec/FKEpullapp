@@ -27,6 +27,13 @@ DEFAULTS: dict[str, Any] = {
         "retries": 2,
         "user_agent": "fke-pull/1.0 (personal booking export)",
     },
+    "app": {
+        "port": 8765,
+        # Hostnames the app will answer to. Anything else is refused, so a
+        # domain someone points at your machine can't reach it. Add your own
+        # name here if you set one up in /etc/hosts.
+        "allowed_hosts": ["127.0.0.1", "localhost", "::1", "[::1]"],
+    },
     "cache": {
         "enabled": True,
         "dir": ".fke-cache",
@@ -92,6 +99,16 @@ def validate_config(cfg: dict[str, Any]) -> None:
         raise ConfigError('site.display_date_format must be "auto", "DMY" or "MDY"')
     if str(site.get("search_date_format", "auto")).upper() not in ("AUTO", "DMY", "MDY"):
         raise ConfigError('site.search_date_format must be "auto", "DMY" or "MDY"')
+
+    app = cfg["app"]
+    try:
+        port = int(app["port"])
+    except (KeyError, TypeError, ValueError):
+        raise ConfigError("app.port must be a whole number") from None
+    if not 0 <= port <= 65535:
+        raise ConfigError("app.port must be between 0 and 65535")
+    if not isinstance(app.get("allowed_hosts"), list) or not app["allowed_hosts"]:
+        raise ConfigError("app.allowed_hosts must be a non-empty list of hostnames")
 
     fetch = cfg["fetch"]
     try:

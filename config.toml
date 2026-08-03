@@ -46,6 +46,17 @@ display_date_format = "auto"
 # stops bookings quietly going missing from an invoice.
 search_date_format = "auto"
 
+[app]
+# The web app (--serve). It is only ever reachable from this machine.
+port = 8765
+
+# Hostnames the app answers to. Anything else is refused, so a domain someone
+# points at your machine can't reach it. If you'd rather type a name than an
+# address, add a line to /etc/hosts:
+#     127.0.0.1   fke
+# then add "fke" here and the app is at http://fke:8765/
+allowed_hosts = ["127.0.0.1", "localhost", "::1", "[::1]"]
+
 [fetch]
 max_concurrency = 5      # hard cap, never exceeded
 request_delay = 0.0      # optional extra seconds between request starts
