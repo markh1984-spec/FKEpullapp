@@ -1,0 +1,107 @@
+# fke-pull configuration.
+#
+# This file is meant to be edited by hand. The bit you will change most often is
+# the [themes] section at the bottom — that is where package names are turned
+# into the short theme labels that go on the invoice.
+
+[site]
+base_url = "http://funkidsentertainers.bykayo.digital"   # note: http, not https
+
+# Paths on the portal. Only change these if FKE move things around.
+completed_path = "/Bookings/MyBookingHistory"
+upcoming_path  = "/Bookings/MyBookings"
+detail_path    = "/Bookings/Details/{id}"
+
+# Login page. "auto" means: request the base URL and follow the redirect that
+# the [Authorize] filter sends us to, then use whatever form on that page has a
+# password box. Set an explicit path (e.g. "/Account/Login") if that fails.
+login_path = "auto"
+
+# Optional overrides if the login form's field names can't be auto-detected.
+# username_field = "UserName"
+# password_field = "Password"
+
+# Booking refs look like "100-26528" and the detail page for that ref is at
+# /Bookings/Details/16528 — i.e. the numeric part minus this offset. The detail
+# page repeats the ref and we assert it matches; a mismatch is a hard error.
+detail_id_offset = 10000
+
+# How dates are written in the booking tables and on the detail pages.
+#   "auto" — work it out from the data (needs at least one date with a day > 12)
+#   "DMY"  — 14/06/2026
+#   "MDY"  — 06/14/2026
+# If "auto" can't tell (every date is ambiguous) the run fails rather than
+# guessing, because guessing wrong silently shifts every date on the invoice.
+display_date_format = "auto"
+
+# NOTE: this does NOT apply to the DateRange search field, which is always sent
+# as US MM/DD/YYYY. See fkepull/dates.py — that one is not configurable on
+# purpose, because getting it wrong truncates results without erroring.
+
+[fetch]
+max_concurrency = 5      # hard cap, never exceeded
+request_delay = 0.0      # optional extra seconds between request starts
+timeout = 30             # per-request timeout in seconds
+retries = 2              # retries on connection errors / 5xx
+user_agent = "fke-pull/1.0 (personal booking export)"
+
+[cache]
+enabled = true
+dir = ".fke-cache"
+# Detail pages for parties that have already happened never change, so they are
+# cached forever. Pages for future events are re-fetched once they are older
+# than this many hours.
+future_ttl_hours = 6
+
+[invoice]
+percent = 20             # the cut you invoice FKE for
+# Rounding of the percentage to whole pounds. "half_up" is how you round by
+# hand (49.50 -> 50). "half_even" is Python's default and rounds .5 to the
+# nearest even number — almost certainly not what you want.
+rounding = "half_up"
+# Sum the already-rounded per-line amounts (true, matches what you bill) rather
+# than rounding the sum at the end (false).
+total_from_rounded_lines = true
+
+[themes]
+# What to do with a package name that matches nothing below:
+#   "warn" — use a fallback label and print a loud warning listing the packages
+#   "fail" — stop the run
+on_unknown = "warn"
+# Fallback label when on_unknown = "warn": "lowercase" (the package name, lower
+# cased) or "empty".
+fallback = "lowercase"
+
+# Exact matches, checked first. Case and spacing are ignored.
+[themes.exact]
+"FUN Kids Party (Indoor Use)" = "party"
+"Outdoor FUN Party" = "party"
+"FUN School Disco" = "school disco"
+"FUN Neon Glow Disco" = "glow"
+"Fun Kids Party + Theme / Spiderman" = "spiderman"
+
+# Regex rules, tried in order after the exact matches above. `theme` may
+# reference a named capture group with {name}; the result is lower cased and
+# has its whitespace collapsed.
+#
+# This first rule means any new themed party works without editing this file:
+# "Fun Kids Party + Theme / Batman" -> "batman".
+[[themes.rules]]
+pattern = "\\+\\s*theme\\s*/\\s*(?P<theme>.+)$"
+theme = "{theme}"
+
+[[themes.rules]]
+pattern = "neon|glow"
+theme = "glow"
+
+[[themes.rules]]
+pattern = "school\\s*disco"
+theme = "school disco"
+
+[[themes.rules]]
+pattern = "disco"
+theme = "disco"
+
+[[themes.rules]]
+pattern = "party"
+theme = "party"
