@@ -8,23 +8,44 @@ Pulls your bookings out of the Fun Kids Entertainers portal. Two ways to use it:
 
 Both do exactly the same pull, so they always show the same numbers.
 
-## Setup
+## Getting it onto your Mac
+
+Open Terminal (⌘-Space, type "Terminal"), and paste this:
 
 ```bash
-cp .env.example .env      # then put your portal login in it
+git clone https://github.com/markh1984-spec/fkepullapp.git ~/FKEpull && open ~/FKEpull
 ```
 
-`.env` is gitignored. Credentials are only ever read from `FKE_USER` /
-`FKE_PASS` in the environment or in that file — nothing is written back to disk
-except the page cache and the CSVs.
+A Finder window opens on the folder. That's the whole install.
 
-## The app
+*No Terminal?* On the GitHub page use **Code → Download ZIP**, unzip it, then
+**right-click** `FKE bookings.command` → **Open** → **Open**. The right-click
+matters the first time only: macOS blocks double-clicked scripts that came from
+a download, and right-click → Open is how you tell it this one is fine. Cloning
+with the command above avoids that entirely.
 
-Double-click **`FKE bookings.command`** in Finder. The first run sets itself up
-(a minute or so), then your browser opens on the bookings. Closing the Terminal
-window it opens stops the app.
+## Running it
 
-From a terminal it's `./fke-pull --serve`.
+Double-click **`FKE bookings.command`**.
+
+The first run takes a minute: it builds itself a private Python environment
+inside the folder, then asks for your Fun Kids Entertainers email and password.
+It saves those to a file called `.env` in that folder, readable only by your
+account, and sends them nowhere except the portal's own login page. To change
+them later, delete `.env` and run it again.
+
+Then it logs in, pulls your bookings, and opens them in your browser. Every run
+after that skips straight to the last part.
+
+- The Terminal window that opens **is** the app — closing it stops the server.
+- Bookmark the link it prints; it stays the same next time.
+- If a party is missing or a figure looks off, that Terminal window is where it
+  says why.
+
+From a terminal it's `./fke-pull --serve`, and `pip install -r requirements.txt`
+once beforehand if you'd rather not use the launcher's environment.
+
+### What you'll see
 
 - **Past bookings** — everything the portal counts as done, i.e. what you can
   invoice for. Total fees and your 20% at the top; *Download invoice.csv*.
