@@ -14,6 +14,7 @@ details.csv
 # Python
 __pycache__/
 *.py[cod]
+# .venv is created by the launcher on first run
 .venv/
 venv/
 .pytest_cache/

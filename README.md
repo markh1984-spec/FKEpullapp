@@ -1,13 +1,16 @@
 # fke-pull
 
-Pulls your bookings out of the Fun Kids Entertainers portal and writes two CSVs:
-`invoice.csv` (what you bill FKE — 20% of each fee) and `details.csv` (the
-per-party information behind it).
+Pulls your bookings out of the Fun Kids Entertainers portal. Two ways to use it:
+
+- **The app** — double-click, and past and upcoming bookings open in your
+  browser as two tabs, with your 20% totalled on each and CSV downloads.
+- **The command line** — writes `invoice.csv` and `details.csv` and exits.
+
+Both do exactly the same pull, so they always show the same numbers.
 
 ## Setup
 
 ```bash
-pip install -r requirements.txt
 cp .env.example .env      # then put your portal login in it
 ```
 
@@ -15,7 +18,31 @@ cp .env.example .env      # then put your portal login in it
 `FKE_PASS` in the environment or in that file — nothing is written back to disk
 except the page cache and the CSVs.
 
-## Use
+## The app
+
+Double-click **`FKE bookings.command`** in Finder. The first run sets itself up
+(a minute or so), then your browser opens on the bookings. Closing the Terminal
+window it opens stops the app.
+
+From a terminal it's `./fke-pull --serve`.
+
+- **Past bookings** — everything the portal counts as done, i.e. what you can
+  invoice for. Total fees and your 20% at the top; *Download invoice.csv*.
+- **Upcoming** — parties still to come, with their fees and 20% totalled
+  separately so next month's figure is ready before you've worked it.
+- **Refresh** re-pulls, using the local cache. **Full refresh** re-reads every
+  detail page from the portal.
+- Click any column heading to sort. Already-invoiced bookings are tagged.
+
+It listens on `127.0.0.1` only, so nothing outside your Mac can reach it, and
+every request has to carry the one-time token in the URL it opens — otherwise
+any website you happen to have open could quietly talk to it.
+
+## The command line
+
+```bash
+pip install -r requirements.txt   # not needed if you use the launcher
+```
 
 ```bash
 ./fke-pull                              # everything you've ever done
@@ -39,6 +66,7 @@ Dates you type are UK format (`DD/MM/YYYY`); `YYYY-MM-DD` also works.
 | `--max-concurrency` | Fewer than 5 if you want to be gentler. Never more than 5. |
 | `--allow-blank-fees` | Carry on when a booking has no Balance, listing it with an empty fee. |
 | `--out-dir`, `--invoice-csv`, `--details-csv` | Where things get written. |
+| `--serve`, `--port`, `--no-open` | Run the app instead of writing CSVs. |
 
 ### The refs file
 
@@ -147,19 +175,22 @@ python3 -m pytest tests -q
 
 The suite runs the whole tool end to end against a fake portal
 (`tests/fake_portal.py`) that imitates the real one: ASP.NET MVC login with an
-anti-forgery token, a `DateRange` that's parsed as US format and silently
-matches nothing otherwise, and detail pages marked up three different ways. It
-covers the rounding, the theme mapping, the cache, the 5-request cap, and each
-of the failure modes above.
+anti-forgery token, a `DateRange` that silently matches nothing unless it's sent
+in the order that portal wants (the tests run it both ways), and detail pages
+marked up three different ways. It covers the maths, the theme mapping, the
+cache, the 5-request cap, the web app's own endpoints and its access controls,
+and each of the failure modes above.
 
 ## Not yet verified against the live site
 
 This was built and tested without network access to
 `funkidsentertainers.bykayo.digital` (blocked at the network level from where it
 was written), so the HTML shapes it handles are modelled from the description of
-the site rather than observed. The parsing is written to accept several common
-ASP.NET MVC layouts and to fail loudly rather than guess, so the first live run
-will either work or tell you exactly what it didn't recognise.
+the site rather than observed. Everything else — the app, the maths, the CSVs,
+the caching, the failure handling — is verified against the fake portal. The
+parsing is written to accept several common ASP.NET MVC layouts and to fail
+loudly rather than guess, so the first live run will either work or tell you
+exactly what it didn't recognise.
 
 Worth doing on the first real run:
 

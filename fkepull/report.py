@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
@@ -161,15 +162,23 @@ def _write(path: Path, header: list[str], rows: list[list[str]]) -> None:
         writer.writerows(rows)
 
 
-def write_invoice(
-    path: Path,
+def csv_text(header: list[str], rows: list[list[str]]) -> str:
+    """The same CSV as _write, as a string, for the web app's downloads."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buffer.getvalue()
+
+
+def invoice_table(
     bookings: list[Booking],
     *,
     percent: int,
     rounding: str,
     total_from_rounded_lines: bool,
     mark_invoiced: bool,
-) -> None:
+) -> tuple[list[str], list[list[str]]]:
     """invoice.csv — one line per party, with the total at the bottom."""
     header = ["#", "Booking Ref", "Date", "Theme", "Fee", f"{percent}%"]
     if mark_invoiced:
@@ -217,10 +226,14 @@ def write_invoice(
     else:
         rows.append(total_row("TOTAL", fee_total, cut_total))
 
-    _write(path, header, rows)
+    return header, rows
 
 
-def write_details(path: Path, bookings: list[Booking]) -> None:
+def write_invoice(path: Path, bookings: list[Booking], **kwargs) -> None:
+    _write(path, *invoice_table(bookings, **kwargs))
+
+
+def details_table(bookings: list[Booking]) -> tuple[list[str], list[list[str]]]:
     """details.csv — the per-booking information, for reference."""
     header = [
         "Booking Ref",
@@ -247,7 +260,11 @@ def write_details(path: Path, bookings: list[Booking]) -> None:
                 format_duration(minutes) if minutes is not None else "",
             ]
         )
-    _write(path, header, rows)
+    return header, rows
+
+
+def write_details(path: Path, bookings: list[Booking]) -> None:
+    _write(path, *details_table(bookings))
 
 
 def load_invoiced_refs(path: str | Path) -> set[str]:

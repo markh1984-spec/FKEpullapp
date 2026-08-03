@@ -98,7 +98,6 @@ class FKEClient:
     def __post_init__(self) -> None:
         self.base_url = self.base_url.rstrip("/")
         self.throttle = _Throttle(self.max_concurrency, self.request_delay)
-        self._main_session = self._new_session()
 
     # -- plumbing ----------------------------------------------------------
 
@@ -124,16 +123,14 @@ class FKEClient:
         """A session for the calling thread, sharing the login cookies.
 
         requests' cookie jar isn't safe to mutate from several threads at once,
-        so each worker thread gets its own session seeded with the cookies we
-        got at login.
+        so every thread gets its own session, seeded with the cookies login got.
+        No thread is special — including the one that logs in, which may not be
+        the main thread when the web app is driving.
         """
         session = getattr(self._local, "session", None)
         if session is None:
-            if threading.current_thread() is threading.main_thread():
-                session = self._main_session
-            else:
-                session = self._new_session()
-                session.cookies.update(self._cookies)
+            session = self._new_session()
+            session.cookies.update(self._cookies)
             self._local.session = session
         return session
 
@@ -217,7 +214,9 @@ class FKEClient:
                 + ". Check FKE_USER / FKE_PASS in .env."
             )
 
-        self._cookies = requests.utils.dict_from_cookiejar(self._main_session.cookies)
+        # Read the cookies off the session that actually did the login, which
+        # is whichever thread we happen to be on.
+        self._cookies = requests.utils.dict_from_cookiejar(self._session().cookies)
         if not self._cookies:
             raise LoginError(
                 "Login appeared to succeed but the portal set no session cookie, "

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FKE bookings</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --ink: #1c1e21;
+    --muted: #6b7280;
+    --line: #e3e6ea;
+    --accent: #1f6feb;
+    --accent-ink: #ffffff;
+    --good: #157347;
+    --warn-bg: #fff8e1;
+    --warn-line: #f0c000;
+    --bad-bg: #fdeaea;
+    --bad-line: #d33;
+    --row-hover: #f0f4fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --panel: #1c1f24;
+      --ink: #e7e9ec;
+      --muted: #9aa3ad;
+      --line: #2c313a;
+      --accent: #4b93ff;
+      --accent-ink: #08121f;
+      --good: #4ade80;
+      --warn-bg: #2b2410;
+      --warn-line: #a98300;
+      --bad-bg: #2c1618;
+      --bad-line: #e06c75;
+      --row-hover: #232830;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  .pulled { color: var(--muted); font-size: 13px; }
+  .spacer { flex: 1 1 auto; }
+  button, a.button {
+    font: inherit; font-size: 13px; padding: 7px 13px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    cursor: pointer; text-decoration: none; white-space: nowrap;
+  }
+  button:hover, a.button:hover { background: var(--row-hover); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  button.primary:hover { filter: brightness(1.08); }
+  button[disabled] { opacity: .55; cursor: default; }
+
+  main { padding: 18px 20px 60px; max-width: 1400px; margin: 0 auto; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: -1px; }
+  .tab {
+    padding: 9px 16px; border: 1px solid var(--line); border-bottom: none;
+    border-radius: 9px 9px 0 0; background: transparent; color: var(--muted);
+    cursor: pointer; font-size: 14px;
+  }
+  .tab[aria-selected="true"] { background: var(--panel); color: var(--ink); font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 0 10px 10px 10px; }
+
+  .summary {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 26px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .stat .label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .stat .value { font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .stat .value.cut { color: var(--good); }
+
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { padding: 9px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th {
+    position: sticky; top: 0; background: var(--panel); cursor: pointer;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    border-bottom: 2px solid var(--line);
+  }
+  th:hover { color: var(--ink); }
+  th .arrow { opacity: .4; }
+  tbody tr:hover { background: var(--row-hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.wrap { white-space: normal; min-width: 180px; }
+  td.cut { color: var(--good); font-weight: 600; }
+  .badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--line); color: var(--muted); }
+  .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+
+  .notice { padding: 12px 16px; border-radius: 9px; margin-bottom: 14px; border: 1px solid; }
+  .notice.bad { background: var(--bad-bg); border-color: var(--bad-line); }
+  .notice.warn { background: var(--warn-bg); border-color: var(--warn-line); }
+  .notice h2 { margin: 0 0 6px; font-size: 14px; }
+  .notice ul { margin: 6px 0 0; padding-left: 20px; }
+  .notice pre { white-space: pre-wrap; margin: 6px 0 0; font-size: 13px; }
+  footer { color: var(--muted); font-size: 12px; padding: 18px 20px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>FKE bookings</h1>
+  <span class="pulled" id="pulled"></span>
+  <span class="spacer"></span>
+  <button id="refresh" class="primary">Refresh</button>
+  <button id="refresh-hard" title="Ignore the local cache and re-read every detail page from the portal">Full refresh</button>
+  <a class="button" id="dl-details" href="#">details.csv</a>
+</header>
+
+<main>
+  <div id="notices"></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="past" aria-selected="true" id="tab-past">Past bookings</button>
+    <button class="tab" role="tab" data-tab="upcoming" aria-selected="false" id="tab-upcoming">Upcoming</button>
+  </div>
+
+  <section class="panel">
+    <div class="summary">
+      <div class="stat"><span class="label">Bookings</span><span class="value" id="s-count">–</span></div>
+      <div class="stat"><span class="label">Total fees</span><span class="value" id="s-fee">–</span></div>
+      <div class="stat"><span class="label" id="s-cut-label">Your 20%</span><span class="value cut" id="s-cut">–</span></div>
+      <span class="spacer"></span>
+      <a class="button" id="dl-tab" href="#">Download CSV</a>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="sort_date">Date <span class="arrow">↑</span></th>
+            <th data-sort="ref">Ref</th>
+            <th data-sort="customer">Customer</th>
+            <th data-sort="theme">Theme</th>
+            <th data-sort="package">Package</th>
+            <th data-sort="venue">Venue</th>
+            <th data-sort="duration">Duration</th>
+            <th class="num" data-sort="fee">Fee</th>
+            <th class="num" data-sort="cut" id="th-cut">20%</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty" hidden>Nothing here.</div>
+  </section>
+</main>
+
+<footer id="footer"></footer>
+
+<script>
+const TOKEN = "__FKE_TOKEN__";
+const state = { data: null, tab: "past", sort: "sort_date", dir: 1, busy: false };
+
+const $ = (id) => document.getElementById(id);
+const api = (path, opts = {}) =>
+  fetch(path + (path.includes("?") ? "&" : "?") + "t=" + encodeURIComponent(TOKEN),
+        { ...opts, headers: { "X-FKE-Token": TOKEN } });
+
+function money(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const [pounds, pence] = String(value).split(".");
+  return "£" + Number(pounds).toLocaleString("en-GB") + (pence ? "." + pence : "");
+}
+
+function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function render() {
+  const data = state.data;
+  if (!data) return;
+
+  $("th-cut").textContent = data.percent + "%";
+  $("s-cut-label").textContent = "Your " + data.percent + "%";
+  $("pulled").textContent = data.pulled_at ? "last pulled at " + data.pulled_at : "";
+
+  for (const name of ["past", "upcoming"]) {
+    $("tab-" + name).textContent =
+      (name === "past" ? "Past bookings" : "Upcoming") + " (" + data[name].count + ")";
+    $("tab-" + name).setAttribute("aria-selected", String(state.tab === name));
+  }
+
+  const section = data[state.tab];
+  $("s-count").textContent = section.count;
+  $("s-fee").textContent = money(section.total_fee);
+  $("s-cut").textContent = money(section.total_cut);
+  const tabFile = state.tab === "past" ? "invoice" : "upcoming";
+  $("dl-tab").href = "/download/" + tabFile + ".csv?t=" + encodeURIComponent(TOKEN);
+  $("dl-tab").textContent = "Download " + tabFile + ".csv";
+  $("dl-details").href = "/download/details.csv?t=" + encodeURIComponent(TOKEN);
+
+  const rows = [...section.rows].sort((a, b) => {
+    const x = a[state.sort] ?? "", y = b[state.sort] ?? "";
+    if (state.sort === "fee" || state.sort === "cut") {
+      return (parseFloat(x || 0) - parseFloat(y || 0)) * state.dir;
+    }
+    return String(x).localeCompare(String(y), "en-GB", { numeric: true }) * state.dir;
+  });
+
+  $("rows").innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHtml(r.date)}</td>
+      <td>${escapeHtml(r.ref)}${r.invoiced ? ' <span class="badge">invoiced</span>' : ""}</td>
+      <td>${escapeHtml(r.customer)}</td>
+      <td>${escapeHtml(r.theme)}</td>
+      <td class="wrap">${escapeHtml(r.package)}</td>
+      <td class="wrap">${escapeHtml(r.venue)}</td>
+      <td>${escapeHtml(r.duration)}</td>
+      <td class="num">${escapeHtml(money(r.fee))}</td>
+      <td class="num cut">${escapeHtml(money(r.cut))}</td>
+    </tr>`).join("");
+
+  $("empty").hidden = rows.length > 0;
+  $("empty").textContent = state.tab === "past"
+    ? "No completed bookings in this range."
+    : "No upcoming bookings.";
+
+  document.querySelectorAll("th[data-sort]").forEach((th) => {
+    const active = th.dataset.sort === state.sort;
+    const arrow = th.querySelector(".arrow");
+    if (arrow) arrow.remove();
+    if (active) {
+      th.insertAdjacentHTML("beforeend",
+        ' <span class="arrow">' + (state.dir === 1 ? "↑" : "↓") + "</span>");
+    }
+  });
+
+  renderNotices(data);
+  $("footer").textContent = data.log.length ? data.log[data.log.length - 1] : "";
+}
+
+function renderNotices(data) {
+  const parts = [];
+  if (data.error) {
+    parts.push(`<div class="notice bad"><h2>Something went wrong</h2>
+      <pre>${escapeHtml(data.error)}</pre>
+      <p>The figures below are from the last successful pull, if there was one.</p></div>`);
+  }
+  if (data.unknown_packages.length) {
+    parts.push(`<div class="notice warn"><h2>Packages with no theme yet</h2>
+      <ul>${data.unknown_packages.map((p) => "<li>" + escapeHtml(p) + "</li>").join("")}</ul>
+      <p>Add them under <code>[themes.exact]</code> in config.toml. The full package
+      name is being used as the theme meanwhile.</p></div>`);
+  }
+  if (data.warnings.length) {
+    parts.push(`<div class="notice warn"><h2>Worth a look</h2>
+      <ul>${data.warnings.map((w) => "<li>" + escapeHtml(w) + "</li>").join("")}</ul></div>`);
+  }
+  if (data.missing_refs.length) {
+    parts.push(`<div class="notice warn"><h2>Already-invoiced refs not in this batch</h2>
+      <p>${escapeHtml(data.missing_refs.join(", "))}</p>
+      <p>Either they're outside the date range, or they've gone from the portal.</p></div>`);
+  }
+  $("notices").innerHTML = parts.join("");
+}
+
+async function load() {
+  const response = await api("/api/data");
+  state.data = await response.json();
+  render();
+}
+
+async function refresh(hard) {
+  if (state.busy) return;
+  state.busy = true;
+  $("refresh").disabled = $("refresh-hard").disabled = true;
+  $("refresh").textContent = "Pulling…";
+  try {
+    const response = await api("/api/refresh" + (hard ? "?hard=1" : ""), { method: "POST" });
+    state.data = await response.json();
+    render();
+  } finally {
+    state.busy = false;
+    $("refresh").disabled = $("refresh-hard").disabled = false;
+    $("refresh").textContent = "Refresh";
+  }
+}
+
+document.querySelectorAll(".tab").forEach((tab) =>
+  tab.addEventListener("click", () => { state.tab = tab.dataset.tab; render(); }));
+
+document.querySelectorAll("th[data-sort]").forEach((th) =>
+  th.addEventListener("click", () => {
+    const key = th.dataset.sort;
+    state.dir = state.sort === key ? -state.dir : 1;
+    state.sort = key;
+    render();
+  }));
+
+$("refresh").addEventListener("click", () => refresh(false));
+$("refresh-hard").addEventListener("click", () => refresh(true));
+
+load();
+</script>
+</body>
+</html>
