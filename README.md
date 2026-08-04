@@ -33,13 +33,22 @@ below instead — it needs only Python from
    — the big yellow button, then open the `.pkg` and click through.
 2. On the GitHub page use **Code → Download ZIP**, and double-click the
    downloaded file to unpack it. Drag the folder somewhere you'll find it again.
-3. **Right-click** `FKE bookings.command` → **Open** → **Open** in the dialog
-   that appears. The right-click matters the first time only: macOS blocks
-   *double-clicked* scripts that arrived in a download.
+3. Double-click `FKE bookings.command`. macOS will refuse the first time,
+   saying it "could not verify" the file. **Click Done** — not Move to Bin —
+   then go to  → **System Settings** → **Privacy & Security**, scroll to
+   the bottom, and click **Open Anyway** next to the file's name. Authenticate,
+   and click **Open** on the dialog that follows.
 
-If macOS still refuses, open Terminal (⌘-Space, "Terminal"), drag
-`FKE bookings.command` from Finder into the Terminal window, and press return.
-That runs the same thing and sidesteps the block entirely.
+   This is normal for any script that wasn't downloaded from the App Store, and
+   you only do it once — afterwards double-clicking works.
+
+   On older macOS the same thing is done by right-clicking the file and
+   choosing **Open**. On macOS 15 and later that no longer works; use
+   Privacy & Security as above.
+
+If there is no **Open Anyway** button, open Terminal (⌘-Space, "Terminal"),
+drag `FKE bookings.command` from Finder into the Terminal window, and press
+return. That runs the same thing and Gatekeeper doesn't block it.
 
 ## Running it
 
