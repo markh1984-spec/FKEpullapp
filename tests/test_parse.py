@@ -2,6 +2,7 @@
 
 import pytest
 
+from fkepull import parse as parse_module
 from fkepull.errors import DataError, SchemaError
 from fkepull.parse import (
     assert_ref_matches,
@@ -122,3 +123,34 @@ def test_find_login_form_keeps_the_antiforgery_token():
 def test_find_login_form_complains_when_there_is_no_form():
     with pytest.raises(SchemaError):
         find_login_form("<html><body>nothing here</body></html>", url="http://x/")
+
+
+# --- it must work without lxml too -------------------------------------------
+
+@pytest.fixture
+def without_lxml(monkeypatch):
+    """Pretend lxml isn't installed, as on a Mac with no developer tools."""
+    monkeypatch.setattr(parse_module, "_PARSERS", ("html.parser",))
+
+
+def test_listing_parses_with_pythons_own_parser(without_lxml):
+    rows = parse_listing(_rows_html(DEFAULT_BOOKINGS), url="/x", source="completed")
+    assert len(rows) == len(DEFAULT_BOOKINGS)
+    assert rows[0].ref == "100-26501"
+    assert rows[0].event_date_raw == "14/06/2025"
+
+
+def test_detail_parses_with_pythons_own_parser(without_lxml):
+    detail = parse_detail(_detail_html(DEFAULT_BOOKINGS[4]), url="/x")
+    assert detail["booking_ref"] == "100-26505"
+    assert detail["customer"] == "Nita Patel"
+    assert detail["balance"] == "£175.00"
+    assert detail["address_line_2"] == "Flat 2"
+    assert detail["county"] == ""
+
+
+def test_a_missing_parser_is_reported_clearly(monkeypatch):
+    monkeypatch.setattr(parse_module, "_PARSERS", ("no-such-parser",))
+    with pytest.raises(SchemaError) as exc:
+        parse_listing("<html></html>", url="/x", source="completed")
+    assert "couldn't parse the page" in str(exc.value)

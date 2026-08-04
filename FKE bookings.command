@@ -32,7 +32,12 @@ if [ ! -x .venv/bin/python ]; then
   say "First run — setting things up, this takes a minute…"
   python3 -m venv .venv
   .venv/bin/python -m pip install --quiet --upgrade pip
-  .venv/bin/python -m pip install --quiet -r requirements.txt
+  # lxml has to be compiled if there's no ready-made build for this Python, and
+  # a Mac without developer tools has no compiler. The tool works without it.
+  if ! .venv/bin/python -m pip install --quiet -r requirements.txt 2>/dev/null; then
+    say "  (skipping one optional speed-up that won't install here)"
+    .venv/bin/python -m pip install --quiet -r requirements-core.txt
+  fi
   say "Done."
   say ""
 fi

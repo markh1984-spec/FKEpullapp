@@ -23,15 +23,23 @@ same command again.
 
 A Finder window opens on the folder. That's the whole install.
 
-*Would rather not install those?* Use the ZIP route below and install Python
-from [python.org/downloads](https://www.python.org/downloads/) instead — about
-60MB rather than several GB.
+*Would rather not install several GB of developer tools?* Use the ZIP route
+below instead — it needs only Python from
+[python.org/downloads](https://www.python.org/downloads/), about 65MB.
 
-*No Terminal?* On the GitHub page use **Code → Download ZIP**, unzip it, then
-**right-click** `FKE bookings.command` → **Open** → **Open**. The right-click
-matters the first time only: macOS blocks double-clicked scripts that came from
-a download, and right-click → Open is how you tell it this one is fine. Cloning
-with the command above avoids that entirely.
+*No Terminal, or no dev tools?*
+
+1. Install Python from [python.org/downloads](https://www.python.org/downloads/)
+   — the big yellow button, then open the `.pkg` and click through.
+2. On the GitHub page use **Code → Download ZIP**, and double-click the
+   downloaded file to unpack it. Drag the folder somewhere you'll find it again.
+3. **Right-click** `FKE bookings.command` → **Open** → **Open** in the dialog
+   that appears. The right-click matters the first time only: macOS blocks
+   *double-clicked* scripts that arrived in a download.
+
+If macOS still refuses, open Terminal (⌘-Space, "Terminal"), drag
+`FKE bookings.command` from Finder into the Terminal window, and press return.
+That runs the same thing and sidesteps the block entirely.
 
 ## Running it
 

@@ -22,11 +22,20 @@ from .errors import DataError, SchemaError
 BOOKING_REF_RE = re.compile(r"\b(\d{2,5})-(\d{3,9})\b")
 
 
+# lxml is quicker and more forgiving of malformed markup, but it has to be
+# compiled, so it may be missing on a machine without developer tools. Python's
+# own parser handles these pages fine — it is just slower.
+_PARSERS = ("lxml", "html.parser")
+
+
 def soup_of(html: str) -> BeautifulSoup:
-    try:
-        return BeautifulSoup(html, "lxml")
-    except Exception:  # pragma: no cover - lxml missing at runtime
-        return BeautifulSoup(html, "html.parser")
+    problem = None
+    for parser in _PARSERS:
+        try:
+            return BeautifulSoup(html, parser)
+        except Exception as exc:  # the parser isn't installed
+            problem = exc
+    raise SchemaError(f"couldn't parse the page: {problem}")
 
 
 def norm(text: str | None) -> str:

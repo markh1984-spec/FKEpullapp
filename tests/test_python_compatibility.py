@@ -37,8 +37,19 @@ def test_toml_is_readable_without_the_stdlib_module():
     source = (ROOT / "fkepull" / "config.py").read_text(encoding="utf-8")
     assert "import tomli as tomllib" in source, "no fallback for Python 3.10 and older"
 
-    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    requirements = "".join(
+        (ROOT / name).read_text(encoding="utf-8")
+        for name in ("requirements.txt", "requirements-core.txt")
+    )
     assert "tomli" in requirements and 'python_version < "3.11"' in requirements
+
+
+def test_nothing_essential_needs_compiling():
+    """A Mac without developer tools has no compiler, so the core deps must all
+    be pure Python. lxml is the one exception and it is optional."""
+    core = (ROOT / "requirements-core.txt").read_text(encoding="utf-8")
+    assert "lxml" not in core
+    assert "lxml" in (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
 
 def test_annotations_are_postponed_everywhere_they_need_to_be():

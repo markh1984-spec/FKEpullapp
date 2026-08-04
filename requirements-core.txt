@@ -1,0 +1,4 @@
+# Everything the tool genuinely needs. All pure Python — no compiler required.
+requests>=2.31
+beautifulsoup4>=4.12
+tomli>=2.0.1; python_version < "3.11"
