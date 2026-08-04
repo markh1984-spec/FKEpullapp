@@ -16,7 +16,16 @@ Open Terminal (⌘-Space, type "Terminal"), and paste this:
 git clone https://github.com/markh1984-spec/fkepullapp.git ~/FKEpull && open ~/FKEpull
 ```
 
+**If macOS asks to install "command line developer tools", click Install.** That
+is expected: a stock Mac has neither `git` nor a working `python3`, and both
+come from that one package. It takes a few minutes. When it finishes, run the
+same command again.
+
 A Finder window opens on the folder. That's the whole install.
+
+*Would rather not install those?* Use the ZIP route below and install Python
+from [python.org/downloads](https://www.python.org/downloads/) instead — about
+60MB rather than several GB.
 
 *No Terminal?* On the GitHub page use **Code → Download ZIP**, unzip it, then
 **right-click** `FKE bookings.command` → **Open** → **Open**. The right-click
